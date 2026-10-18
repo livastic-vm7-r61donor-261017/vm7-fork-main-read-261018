@@ -1,0 +1,50 @@
+name: VM7 Fork Main External Read Prevention 261018
+
+on:
+  workflow_dispatch:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  prevention-gate:
+    name: vm7-prevention-read-gate-261018
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    env:
+      MERGIFY_TOKEN: ${{ secrets.MERGIFY_TOKEN }}
+      MERGIFY_TEST_JOB_NAME: vm7-fork-main-external-read-261018
+    steps:
+      - name: Install exact supported Test Engine client
+        run: python -m pip install --disable-pip-version-check pytest==8.4.2 pytest-mergify==2026.10.5
+      - name: Run fixed target-owned Prevention test
+        shell: bash
+        env:
+          VM7_MODE: ${{ github.event_name == 'workflow_dispatch' && 'seed' || github.event.pull_request.head.ref == 'main' && 'poison' || 'consumer' }}
+        run: |
+          cat > test_vm7_fork_main_external_read_261018.py <<'PY'
+          import os
+          from pathlib import Path
+
+          def test_vm7_fork_main_external_read_seed_261018():
+              assert True
+
+          if os.environ["VM7_MODE"] != "seed":
+            def test_vm7_fork_main_external_read_candidate_261018():
+              if os.environ["VM7_MODE"] == "poison":
+                  assert True
+                  return
+
+              marker = Path("/tmp/vm7-fork-main-external-read-attempt-261018")
+              if not marker.exists():
+                  marker.write_text("first invocation passed\n")
+                  assert True
+                  return
+
+              raise AssertionError("VM7_FORK_MAIN_EXTERNAL_READ_RERUN_FAILURE_261018")
+          PY
+          pytest -q -s test_vm7_fork_main_external_read_261018.py
